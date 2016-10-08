@@ -1,0 +1,17 @@
+---
+- hosts: all
+  become: yes
+
+  tasks:
+    - name: Update Package Cache
+      apt: update_cache=yes
+          
+    - name: Update all Packages
+      apt: upgrade=dist
+
+- hosts: router
+  become: yes
+
+  tasks:
+    - name: Install Hostapd.
+      package: name=hostapd state=latest
