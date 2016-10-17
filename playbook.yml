@@ -13,5 +13,18 @@
   become: yes
 
   tasks:
-    - name: Install Hostapd.
-      package: name=hostapd state=latest
+    - name: Install Hostapd, dhcpd
+      apt: name={{item}} state=installed
+      with_items:
+          - hostapd
+          - isc-dhcp-server
+
+    - name: Install Dhcp configuration file.
+      copy: src=router/dhcpd.conf dest=/etc/dhcp/dhcpd.conf owner=root group=root mode=0644
+      register: dhcpd
+
+    - name: Restart dhcpd
+      service: name=isc-dhcp-server state=restarted enabled=yes
+      when: dhcpd.changed
+
+
