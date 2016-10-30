@@ -3,3 +3,6 @@
 
 [db]
 10.0.1.240 ansible_user=pi
+
+[web]
+10.0.1.241 ansible_user=pi

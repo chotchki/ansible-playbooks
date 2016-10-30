@@ -8,6 +8,11 @@
           
     - name: Update all Packages
       apt: upgrade=dist
+    
+    - name: Install Apt Control Packages
+      apt: name={{item}} state=installed
+      with_items:
+        - python3-apt
 
 - hosts: router
   become: yes
@@ -16,8 +21,8 @@
     - name: Install Hostapd, dhcpd
       apt: name={{item}} state=installed
       with_items:
-          - hostapd
-          - isc-dhcp-server
+        - hostapd
+        - isc-dhcp-server
 
     - name: Install Dhcp configuration file.
       copy: src=router/ dest=/etc/dhcp/ owner=root group=root mode=0644
@@ -27,4 +32,10 @@
       service: name=isc-dhcp-server state=restarted enabled=yes
       when: dhcpd.changed
 
+- hosts: db
+  become: yes
 
+  tasks:
+    - name: Install Postgres Apt Key and Url
+      apt_key: data=db/apt_key/ACCC4CF8.asc state=present
+      apt_repository: repo='deb http://apt.postgresql.org/pub/repos/apt/ xenial-pgdg main' state=present
