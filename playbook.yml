@@ -36,6 +36,7 @@
   become: yes
 
   tasks:
-    - name: Install Postgres Apt Key and Url
-      apt_key: data=db/apt_key/ACCC4CF8.asc state=present
-      apt_repository: repo='deb http://apt.postgresql.org/pub/repos/apt/ xenial-pgdg main' state=present
+    - name: Install Postgres 9.4
+      apt: name={{item}} state=installed
+      with_items:
+        - postgresql-9.4
