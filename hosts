@@ -6,3 +6,6 @@
 
 [web]
 10.0.1.241 ansible_user=pi
+
+[kiosk]
+10.0.1.242 ansible_user=pi

@@ -8,6 +8,15 @@
           
     - name: Update all Packages
       apt: upgrade=dist
+      register: upgrade_reboot
+
+    - name: Reboot after upgrade
+      command: /sbin/reboot
+      when: upgrade_reboot.changed
+
+    - name: Wait for the server to finish rebooting
+      become: no
+      local_action: wait_for host="{{ inventory_hostname }}" search_regex=OpenSSH port=22 timeout=300
     
     - name: Install Apt Control Packages
       apt: name={{item}} state=installed
@@ -40,3 +49,31 @@
       apt: name={{item}} state=installed
       with_items:
         - postgresql-9.4
+
+- hosts: kiosk
+  become: yes
+
+  tasks:
+    - name: Install needed packages
+      apt: name={{item}} state=installed
+      with_items:
+        - chromium-browser
+        - lightdm
+        - matchbox-keyboard
+        - x11-xserver-utils 
+        - unclutter
+
+    - name: Enable desktop mode
+      service: name=lightdm state=started enabled=yes
+    
+    - name: Install LightDM configuration file.
+      copy: src=kiosk/lightdm/ dest=/etc/lightdm/ owner=root group=root mode=0644
+      register: lightdm
+
+    - name: Install Kiosk Script
+      copy: src=kiosk/kiosk.sh dest=/usr/local/bin owner=root group=root mode=0755
+      register: lightdm
+
+    - name: Restart Desktop
+      service: name=lightdm state=restarted
+      when: lightdm.changed
