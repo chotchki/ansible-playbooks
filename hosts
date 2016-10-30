@@ -1,2 +1,5 @@
 [router]
 10.0.1.1 ansible_user=pi
+
+[db]
+10.0.1.240 ansible_user=pi
