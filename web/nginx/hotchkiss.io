@@ -3,6 +3,10 @@ server {
     
     ssl_certificate     /etc/nginx/cloudflare-ssl/hotchkiss.io.pem;
     ssl_certificate_key /etc/nginx/cloudflare-ssl/hotchkiss.io.key;
+    
+    ssl_client_certificate /etc/nginx/cloudflare-ssl/origin-pull-ca.pem;
+    ssl_verify_client on;
+    
     ssl_protocols       TLSv1.2;
     ssl_ciphers         HIGH:!aNULL:!MD5;
 
