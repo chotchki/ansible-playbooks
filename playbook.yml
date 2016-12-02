@@ -4,24 +4,52 @@
 
   tasks:
     - name: Update Package Cache
-      apt: update_cache=yes
+      apt: update_cache=yes cache_valid_time=3600
           
     - name: Update all Packages
       apt: upgrade=dist
-      register: upgrade_reboot
 
-    - name: Reboot after upgrade
-      command: /sbin/reboot
-      when: upgrade_reboot.changed
+    - name: restart machine
+      shell: sleep 2 && shutdown -r now "Ansible updates triggered" removes=/var/run/reboot-required
+      async: 1
+      poll: 0
+      ignore_errors: true
+      register: reboot_triggered
 
-    - name: Wait for the server to finish rebooting
+
+    - name: waiting for server to come back
+      local_action: wait_for host={{ inventory_hostname }} state=started delay=30 timeout=300
       become: no
-      local_action: wait_for host="{{ inventory_hostname }}" search_regex=OpenSSH port=22 timeout=300
-    
+      when: reboot_triggered.changed
+
+    - name: SSH Keys
+      authorized_key: user=pi key={{ item }}
+      with_file:
+        - ssh_keys/chris_mac.pub
+
     - name: Install Apt Control Packages
       apt: name={{item}} state=installed
       with_items:
         - python3-apt
+
+    - name: Disallow password authentication
+      lineinfile: dest=/etc/ssh/sshd_config 
+                  regexp="^PasswordAuthentication"
+                  line="PasswordAuthentication no"
+                  state=present
+      register: restart_ssh
+
+    - name: Disallow root SSH access
+      lineinfile: dest=/etc/ssh/sshd_config
+                  regexp="^PermitRootLogin"
+                  line="PermitRootLogin no"
+                  state=present
+      register: restart_ssh
+
+    - name: Restart SSH
+      service: name=ssh state=restarted enabled=yes
+      when: restart_ssh.changed
+
 
 - hosts: router
   become: yes
@@ -34,12 +62,43 @@
         - isc-dhcp-server
 
     - name: Install Dhcp configuration file.
-      copy: src=router/ dest=/etc/dhcp/ owner=root group=root mode=0644
+      copy: src=router/dhcp/ dest=/etc/dhcp/ owner=root group=root mode=0644
+      register: dhcpd
+
+    - name: Disable dhcp on wlan0
+      lineinfile: dest=/etc/dhcpcd.conf
+                  regexp="^denyinterfaces"
+                  line="denyinterfaces wlan0"
+                  state=present
       register: dhcpd
 
     - name: Restart dhcpd
       service: name=isc-dhcp-server state=restarted enabled=yes
       when: dhcpd.changed
+
+    - name: Install Interfaces File
+      copy: src=router/interfaces dest=/etc/network/interfaces owner=root group=root mode=0644
+      register: interfaces
+
+    - name: Restart Networking
+      service: name=networking state=restarted enabled=yes
+      when: interfaces.changed
+
+- hosts: proxy
+  become: yes
+
+  tasks:
+    - name: Install squid
+      apt: name={{item}} state=installed
+      with_items:
+        - squidguard
+
+    - name: Enable SquidGuard
+      lineinfile: dest=/etc/squid3/squid.conf
+                  regexp="^url_rewrite_program"
+                  line="url_rewrite_program /usr/bin/squidguard"
+                  state=present
+      register: squid
 
 - hosts: db
   become: yes
@@ -70,6 +129,10 @@
       copy: src=kiosk/lightdm/ dest=/etc/lightdm/ owner=root group=root mode=0644
       register: lightdm
 
+    - name: Install Chromium Policiy Files
+      copy: src=kiosk/chrome_policy.json dest=/etc/chromium-browser/policies/managed mode=0644
+      register: lightdm
+
     - name: Install Kiosk Script
       copy: src=kiosk/kiosk.sh dest=/usr/local/bin owner=root group=root mode=0755
       register: lightdm
@@ -77,3 +140,51 @@
     - name: Restart Desktop
       service: name=lightdm state=restarted
       when: lightdm.changed
+
+- hosts: web
+  become: yes
+
+  tasks:
+    - name: Install Interfaces File
+      copy: src=web/interfaces dest=/etc/network/interfaces owner=root group=root mode=0644
+      register: interfaces
+
+    - name: Restart Networking
+      service: name=networking state=restarted enabled=yes
+      when: interfaces.changed
+
+    - name: Install Nginx Configuration
+      synchronize:
+        src: web/nginx/
+        dest: /etc/nginx/sites-enabled
+        delete: yes
+        recursive: yes
+      register: nginx
+    
+    - name: Install Nginx SSL Certs
+      synchronize:
+        src: web/nginx-ssl/
+        dest: /etc/nginx/cloudflare-ssl
+        delete: yes
+        recursive: yes
+      register: nginx_ssl
+
+    - name: restart Nginx
+      service: name=nginx state=restarted
+      when: nginx.changed or nginx_ssl.changed
+
+    - name: Check out frontend
+      git:
+        repo: 'https://github.com/chotchki/hotchkiss-io-frontend.git'
+        dest: /var/www/hotchkiss-io
+      become: yes
+      become_user: www-data
+
+  #    - name: Set Ownership
+  #    file:
+  #      path: /var/www/hotchkiss-io
+  #      owner: www-data
+  #      group: www-data
+  #      mode: 0755
+  #      recurse: yes
+  #      state: directory

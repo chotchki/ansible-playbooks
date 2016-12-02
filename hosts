@@ -9,3 +9,6 @@
 
 [kiosk]
 10.0.1.242 ansible_user=pi
+
+[proxy]
+10.0.1.243 ansible_user=pi
